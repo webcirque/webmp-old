@@ -1,7 +1,7 @@
 {
 	"name": "Webcirque WebMP 0.28",
 	"short_name": "WebMP 0.28",
-	"version": "0.28.20190213",
+	"version": "0.28.0.15",
 	"manifest_version": 2,
 	"description": "__MSG_extDescription__",
 	"icons": {
@@ -17,7 +17,7 @@
 		"default_title": "WebMP 0.28",
 		"default_popup": "popup.htm"
 	},
-	"homepage_url": "https://pwcq.ml/",
+	"homepage_url": "https://www.pwcq.dev/project/webmp-old/",
 	"permissions": [
 		"cookies", "geolocation", "notifications", "storage", "unlimitedStorage", "http://*/*", "https://*/*", "http://localhost/*"
 	]

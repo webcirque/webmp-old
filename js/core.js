@@ -1,5 +1,51 @@
 ﻿// Constants
-const fpsRange = [60, 58, 56, 54, 52, 50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10];
+const fpsRange = [144, 120, 90, 75, 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12, 8];
+
+// Prepend variables for OSC-XY
+self.audioCxtSampling = 48;
+self.oscScaler = 0.5;
+self.oscLine = 2;
+self.oscIntensity = 0.1; // Is linearly related to sample rate. (0.1@48kHz 0.05@96kHz)
+self.oscColour = "255, 255, 0"; // The color of the stroke.
+self.oscColourSecond = "0, 255, 0";
+self.oscAfterglow = 0.2;
+self.oscInterpolation = 1;
+self.oscHardLimit = 2048;
+self.oscNativeWidth = 480;
+self.oscNativeHeight = 320;
+self.oscAspectRatio = 1; // (w/h)
+self.oscResizeAs = 0; // 0 for best fit, 1 for stretch with locked ratio, 2 for fill
+self.oscDirection = 0; // 0 for -X-Y (Oscillofun correct), 1 for +X-Y, 2 for -X+Y, 3 for +X+Y (Chris Allen correct)
+
+self.shiftFactor = {upper: 90, lower: 45};
+
+// Simple interpolation
+Array.prototype.gapMe = function () {
+	var o = []; // Output array
+	var p = []; // Panning data
+	var d = this.length - 1;
+	for (var a = 0; a < this.length; a ++) {
+		var b = a - 1;// Pointer of value a
+		var c = a + 1;// Pointer of value b
+		(b < 0) && (b = 0);
+		(c > d) && (c = d);
+		p.push((this[c] - this[b]) / 2);
+	};
+	for (var a = 0; a < this.length; a ++) {
+		o.push(this[a]);
+		if (a < d) {
+			o.push(((p[a] * 0.5 + this[a]) + (p[a + 1] * -0.5 + this[a + 1]) + this[a] + this[a+1]) / 4);
+		};
+	};
+	return o;
+};
+Array.prototype.gap = function (times) {
+	var o = this.slice();
+	for (let count = 0; count < times; count ++) {
+		o = o.gapMe();
+	};
+	return o;
+};
 
 // Message
 addEventListener("message", function(e) {
@@ -291,23 +337,23 @@ function visualizerShiftingFunc() {
 	fpsAvgDiff /= fpsHistory.length;
 	let fpsIndex = fpsRange.indexOf(visualizerFPS);
 	if (!(window.inactive)) {
-		if (fpsAvgDiff > 60) {
+		if (fpsAvgDiff > shiftFactor.upper) {
 			if (fpsIndex < fpsRange.length - 1) {
 				// Decrease FPS
 				clearInterval(visualizerThread);
 				let shiftedFPS = fpsRange[fpsIndex + 1];
 				visualizerThread = setInterval(audioVisualizer, 1000 / shiftedFPS);
 				visualizerFPS = shiftedFPS;
-				fpsHistory = new Uint16Array(visualizerFPS / 2);
+				//fpsHistory = new Uint16Array(visualizerFPS / 2)'
 			}
-		} else if (fpsAvgDiff < 36) {
+		} else if (fpsAvgDiff < shiftFactor.lower) {
 			if (fpsIndex != 0) {
 				// Increase FPS
 				clearInterval(visualizerThread);
 				let shiftedFPS = fpsRange[fpsIndex - 1];
 				visualizerThread = setInterval(audioVisualizer, 1000 / shiftedFPS);
 				visualizerFPS = shiftedFPS;
-				fpsHistory = new Uint16Array(visualizerFPS / 2);
+				//fpsHistory = new Uint16Array(visualizerFPS / 2);
 			}
 		}
 	}
@@ -379,11 +425,8 @@ function refresherThreadFunc() {
 	fps.innerHTML = (Math.round(1000 / (timeSt(fps.curr) - timeSt(fps.last)))).toString() + "($1)".replace("$1", visualizerFPS);
 	if (!(window.inactive)) {
 		fpsHistory[fpsHistoryWriterPin] = Math.round(10000 / (timeSt(fps.curr) - timeSt(fps.last)));
-		if (fpsHistoryWriterPin >= fpsHistory.length - 1) {
-			fpsHistoryWriterPin = 0;
-		} else {
-			fpsHistoryWriterPin ++;
-		}
+		fpsHistoryWriterPin ++;
+		fpsHistoryWriterPin %= fpsHistory.length;
 	};
 	let timeArr = [fps.curr.getHours().toString(), fps.curr.getMinutes().toString(), fps.curr.getSeconds().toString()];
 	for (let countA = 0; countA < timeArr.length; countA++) {
@@ -476,7 +519,7 @@ function refresherThreadFunc() {
 			gui.status.push(lang.videoSynced + " " + (Math.round((video.currentTime + config.delay - audio.currentTime) * 1000) / 1000).toString());
 		}
 	}
-	document.title = "[" + gui.title.innerText + "] WebMP DR28";
+	document.title = "[" + gui.title.innerText + "] WebMP 0.28.0.15";
 	exchangeData = {
 		"type": "info:player-core",
 		"title": document.title,
@@ -528,7 +571,7 @@ function refresherThreadFunc() {
 	if (window.batteryAPI) {
 		if (batteryAPI.charging) {
 			battery.style.color = "#0f0";
-			battery.innerHTML = "<span style=\"color:#fff;\">[" + mediaMode + "] </span>" + Math.round(batteryAPI.level * 100).toString() + "% " + lang.charging;
+			battery.innerHTML = "<span style=\"color:#fff;\">[" + Math.round(fpsAvgDiff) + "] </span>" + Math.round(batteryAPI.level * 100).toString() + "% " + lang.charging;
 		}
 		else {
 			if (batteryAPI.level >= 0.5) {
@@ -537,13 +580,13 @@ function refresherThreadFunc() {
 			else {
 				battery.style.color = "rgb(255," + ((batteryAPI.level) * 510).toString() + ",0)";
 			}
-			battery.innerHTML = "<span style=\"color:#fff;\">[" + mediaMode + "] </span>" + Math.round(batteryAPI.level * 100).toString() + "% " + lang.discharging;
+			battery.innerHTML = "<span style=\"color:#fff;\">[" + Math.round(fpsAvgDiff) + "] </span>" + Math.round(batteryAPI.level * 100).toString() + "% " + lang.discharging;
 		}
 	}
 	// Media info table
 	if (gui.mediaInfo && video.videoWidth < 4 && audio.readyState > 0) {
 		if (window.visualizerMode) {
-			if (visualizerMode.toLowerCase() != "osc-xy") {
+			if (visualizerMode.toLowerCase() != "osc-xy" && visualizerMode.toLowerCase() != "osc") {
 				gui.mediaInfo.style.display = "block";
 				gui.mediaInfo.artist.children[0].innerHTML = lang.miArtist;
 				gui.mediaInfo.album.children[0].innerHTML = lang.miAlbum;
@@ -662,10 +705,29 @@ document.onreadystatechange = function() {
 		// Prepare for microphone connect
 		gui.connectMic.innerHTML = lang.audioMenuStrings["connect-mic"];
 		// Prepare for framerate monitoring
-		fpsHistory = new Uint16Array(60);
+		fpsHistory = new Uint16Array(30);
 		fpsHistoryWriterPin = 0;
+		// Load media
+		if (window.TabSearch) {
+			info = TabSearch(location.search);
+			if (info.file) {
+				video.src = info.file;
+				video.volume = 0;
+				audio.src = info.file;
+			}
+			if (info.start) {
+				video.currentTime = parseFloat(info.start);
+				audio.currentTime = parseFloat(info.start);
+			}
+			if (info.sample) {
+				audioCxtSampling = parseInt(info.sample)/1000;
+			}
+			else {
+				gui.title.innerHTML = lang.noArgs;
+			}
+		}
 		// Initialize audio environment
-		audioCxt = new AudioContext();
+		audioCxt = new AudioContext({sampleRate: (audioCxtSampling * 1000)});
 		audioMedia = audioCxt.createMediaElementSource(audio);
 		globalAudioSource = "media";
 		audioBA = audioCxt.createBufferSource();
@@ -879,24 +941,8 @@ document.onreadystatechange = function() {
 		refresherThread = setInterval(refresherThreadFunc, 33.3);
 		audioPanelThread = setInterval(audioPanelThreadFunc, 1000/15);
 		visualizerThread = setInterval(audioVisualizer, 1000/60);
-		visualizerShiftingThread = setInterval(visualizerShiftingFunc, 500);
+		visualizerShiftingThread = setInterval(visualizerShiftingFunc, 250);
 		visualizerFPS = 60;
-		// Load media
-		if (window.TabSearch) {
-			info = TabSearch(location.search);
-			if (info.file) {
-				video.src = info.file;
-				video.volume = 0;
-				audio.src = info.file;
-			}
-			if (info.start) {
-				video.currentTime = parseFloat(info.start);
-				audio.currentTime = parseFloat(info.start);
-			}
-			else {
-				gui.title.innerHTML = lang.noArgs;
-			}
-		}
 		// Load buttons
 		btn.play.onmouseup = function() {
 			video.play();
@@ -1551,14 +1597,17 @@ function audioVisualizer () {
 				audioAnlArray.forEach((e, i) => {
 					fad = new Float32Array(e.frequencyBinCount);
 					e.getFloatTimeDomainData(fad);
-					input[i] = fad;
+					let arrIntermediate = Array.from(fad);
+					arrIntermediate = arrIntermediate.gap(oscInterpolation);
+					input[i] = arrIntermediate;
 				});
 				// Visualizer core
 				if (gui.canvas && video.videoHeight * video.videoWidth < 16 && audio.paused == false) {
 					canvasCleared = false;
-					gui.ctx.fillStyle = "rgba(0, 0, 0, 0.37)";
+					gui.ctx.fillStyle = "rgba(0, 0, 0, " + (1 - oscAfterglow).toString() + ")";
 					gui.ctx.fillRect(0, 0, gui.canvas.width, gui.canvas.height);
 					gui.ctx.fillStyle = "#ff0";
+					gui.ctx.lineWidth = self.oscLine || 1;
 					if (window.audioCxt) {
 						let oscilloArea = 0;
 						if (gui.canvas.width > gui.canvas.height) {
@@ -1568,19 +1617,111 @@ function audioVisualizer () {
 						}
 						if (audioMedia.channelCount > 1) {
 							let jumpSample = 1;
-							for (let zc = 1; zc < 512 / jumpSample; zc ++) {
+							for (let zc = 0; zc < Math.min(input[0].length, input[1].length, self.oscHardLimit || 1024) / jumpSample; zc ++) {
 								let lineTransparency = 0;
-								let lineThreshold = 0.1 * jumpSample;
+								let lineThreshold = oscIntensity * jumpSample;
 								let lineLength = Math.sqrt(((input[0][zc * jumpSample] - input[0][zc-1]) / audio.volume) ** 2 + ((input[1][zc] - input[1][(zc-1) * jumpSample]) / audio.volume) ** 2);
 								if (lineLength < lineThreshold) {
-									lineTransparency = (-1) * lineLength / lineThreshold + 1;
-								}
-								gui.ctx.strokeStyle = "rgba(255,255,0,"+ lineTransparency + ")";
+									lineTransparency = 1 - (lineLength / lineThreshold);
+								};
+								gui.ctx.strokeStyle = "rgba(" + oscColour + ","+ lineTransparency + ")";
 								gui.ctx.beginPath();
-								gui.ctx.moveTo((-1) * input[0][(zc-1) * jumpSample] * oscilloArea * 0.9 / audio.volume + gui.canvas.width / 2, input[1][(zc-1) * jumpSample] * oscilloArea * 0.9 / audio.volume + gui.canvas.height / 2);
-								gui.ctx.lineTo((-1) * input[0][zc * jumpSample] * oscilloArea * 0.9 / audio.volume + gui.canvas.width / 2, input[1][zc * jumpSample] * oscilloArea * 0.9 / audio.volume + gui.canvas.height / 2);
+								gui.ctx.moveTo((-1) * input[0][(zc-1) * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.width / 2, input[1][(zc-1) * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.height / 2);
+								gui.ctx.lineTo((-1) * input[0][zc * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.width / 2, input[1][zc * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.height / 2);
 								gui.ctx.stroke();
 							}
+							/* for (let zc = 0; zc < Math.min(input[0].length, input[1].length, self.oscHardLimit || 1024) / jumpSample; zc ++) {
+								let lineTransparency = 1;
+								let lineThreshold = oscIntensity * jumpSample;
+								let lineLength = Math.sqrt(((input[0][zc * jumpSample] - input[0][zc-1]) / audio.volume) ** 2 + ((input[1][zc] - input[1][(zc-1) * jumpSample]) / audio.volume) ** 2);
+								if (lineLength < lineThreshold) {
+									lineTransparency = 1 - (lineLength / lineThreshold);
+								};
+								gui.ctx.strokeStyle = "rgba(" + oscColour + ","+ lineTransparency + ")";
+								gui.ctx.beginPath();
+								gui.ctx.moveTo((-1) * input[0][(zc) * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.width / 2, input[1][(zc) * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.height / 2);
+								gui.ctx.lineTo((-1) * input[0][zc * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.width / 2, input[1][zc * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.height / 2);
+								gui.ctx.stroke();
+							} */
+						}
+					}
+				};
+				break;
+			};
+			case "osc": {
+				// Rewritten output
+				input = [];
+				audioAnlArray.forEach((e, i) => {
+					fad = new Float32Array(e.frequencyBinCount);
+					e.getFloatTimeDomainData(fad);
+					let arrIntermediate = Array.from(fad);
+					arrIntermediate = arrIntermediate.gap(oscInterpolation);
+					input[i] = arrIntermediate;
+				});
+				// Visualizer core
+				if (gui.canvas && video.videoHeight * video.videoWidth < 16 && audio.paused == false) {
+					canvasCleared = false;
+					gui.ctx.fillStyle = "rgba(0, 0, 0, " + (1 - oscAfterglow).toString() + ")";
+					gui.ctx.fillRect(0, 0, gui.canvas.width, gui.canvas.height);
+					gui.ctx.fillStyle = "#ff0";
+					gui.ctx.lineWidth = self.oscLine || 1;
+					if (window.audioCxt) {
+						let oscilloArea = 0;
+						if (gui.canvas.width > gui.canvas.height) {
+							oscilloArea = gui.canvas.height;
+						} else {
+							oscilloArea = gui.canvas.width;
+						}
+						if (audioMedia.channelCount > 1) {
+							let jumpSample = 1;
+							let zcMax = Math.min(input[0].length, input[1].length, self.oscHardLimit || 1024);
+							for (let zc = 1; zc < zcMax / jumpSample; zc ++) {
+								let lineTransparencyA = 0, lineTransparencyB = 0;
+								let lineThreshold = oscIntensity * jumpSample;
+								let lineLengthA = Math.abs(input[0][zc-1] - input[0][zc]);
+								if (lineLengthA < lineThreshold) {
+									lineTransparencyA = 1 - (lineLengthA / lineThreshold);
+								};
+								let lineLengthB = Math.abs(input[1][zc-1] - input[1][zc]);
+								if (lineLengthB < lineThreshold) {
+									lineTransparencyB = 1 - (lineLengthB / lineThreshold);
+								};
+								let pointXA = gui.canvas.height / 2 - input[0][(zc - 1) * jumpSample] * oscilloArea * oscScaler / audio.volume;
+								let pointXB = gui.canvas.height / 2 - input[0][(zc) * jumpSample] * oscilloArea * oscScaler / audio.volume;
+								let pointYA = gui.canvas.height / 2 - input[1][(zc - 1) * jumpSample] * oscilloArea * oscScaler / audio.volume;
+								let pointYB = gui.canvas.height / 2 - input[1][(zc) * jumpSample] * oscilloArea * oscScaler / audio.volume;
+								let sweepA = ((zc - 1) / zcMax) * gui.canvas.width;
+								let sweepB = (zc / zcMax) * gui.canvas.width;
+								inspector = {pointXA, pointXB, pointYA, pointYB, sweepA, sweepB};
+								gui.ctx.strokeStyle = "rgba(" + oscColour + ","+ lineTransparencyA + ")";
+								gui.ctx.beginPath();
+								gui.ctx.moveTo(sweepA, pointXA);
+								gui.ctx.lineTo(sweepB, pointXB);
+								gui.ctx.stroke();
+								gui.ctx.strokeStyle = "rgba(" + oscColourSecond + ","+ lineTransparencyB + ")";
+								gui.ctx.beginPath();
+								gui.ctx.moveTo(sweepA, pointYA);
+								gui.ctx.lineTo(sweepB, pointYB);
+								gui.ctx.stroke();
+							}
+							/* for (let zc = 0; zc < zcMax / jumpSample; zc ++) {
+								let lineTransparency = 1;
+								let lineThreshold = oscIntensity * jumpSample;
+								let lineLength = Math.sqrt(((input[0][zc * jumpSample] - input[0][zc-1]) / audio.volume) ** 2 + ((input[1][zc] - input[1][(zc-1) * jumpSample]) / audio.volume) ** 2);
+								gui.ctx.strokeStyle = "rgba(" + oscColour + ","+ lineTransparency + ")";
+								gui.ctx.beginPath();
+								let pointX = -1 * input[0][(zc) * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.height / 2;
+								let pointY = -1 * input[1][(zc) * jumpSample] * oscilloArea * oscScaler / audio.volume + gui.canvas.height / 2;
+								let sweep = (zc / zcMax) * gui.canvas.width;
+								gui.ctx.moveTo(sweep, pointX);
+								gui.ctx.lineTo(sweep, pointX);
+								gui.ctx.stroke();
+								gui.ctx.strokeStyle = "rgba(" + oscColourSecond + ","+ lineTransparency + ")";
+								gui.ctx.beginPath();
+								gui.ctx.moveTo(sweep, pointY);
+								gui.ctx.lineTo(sweep, pointY);
+								gui.ctx.stroke();
+							}*/
 						}
 					}
 				};

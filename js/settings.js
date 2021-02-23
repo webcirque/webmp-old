@@ -193,6 +193,18 @@ document.onreadystatechange = function () {
 				}, "*");
 				localStorage.setItem("WEBMPS:visualizer", "fft-f");
 			};
+			_q("#drawer-visualizer #text-visualizer-osc-x").onclick = () => {
+				window.parent.postMessage({
+					"type": "forward:player-core",
+					"data": {
+
+						"type": "info:settings",
+						"specify": "changeVisualizerMode",
+						"data": "osc"
+					}
+				}, "*");
+				localStorage.setItem("WEBMPS:visualizer", "osc");
+			};
 			break;
 		};
 		case "complete": {

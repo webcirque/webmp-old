@@ -193,6 +193,12 @@ document.addEventListener("readystatechange", function () {
 				}
 				wmpPlayerCorePath += "start=" + wmpPassParam.start;
 			}
+			if (wmpPassParam.sample) {
+				if (wmpPlayerCorePath != "core.htm?") {
+					wmpPlayerCorePath += "&";
+				}
+				wmpPlayerCorePath += "sample=" + wmpPassParam.sample;
+			}
 			if (JSON.stringify(wmpPassParam) != "{\"\":\"undefined\"}") {
 				wmpPlayerCore.src = wmpPlayerCorePath;
 			}
